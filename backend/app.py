@@ -128,6 +128,132 @@ async def health():
     return {"status": "ok", "message": "CloudSense API is running"}
 
 
+# ===================== MOSDAC DOWNLOAD =====================
+
+import subprocess
+import json
+import glob
+from datetime import datetime, timedelta
+
+class MOSDACDownloadRequest(BaseModel):
+    username: str
+    password: str
+    hours_back: int = 6  # Download data from last N hours
+
+MOSDAC_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "MOSDAC_Data")
+os.makedirs(MOSDAC_DATA_DIR, exist_ok=True)
+
+@app.post("/api/mosdac/download")
+async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dict = Depends(verify_token)):
+    """
+    Download current INSAT-3DR data from MOSDAC and run inference.
+    Dataset: 3RIMG_L1C_ASIA_MER (6-channel Level1 Mercator for Asian Sector)
+    """
+    try:
+        # 1. Calculate time range (last N hours)
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=request.hours_back)
+        
+        # 2. Create config.json for mdapi
+        config = {
+            "user_credentials": {
+                "username": request.username,
+                "password": request.password
+            },
+            "search_parameters": {
+                "datasetId": "3RIMG_L1C_ASIA_MER",
+                "startTime": start_time.strftime("%Y-%m-%d"),
+                "endTime": end_time.strftime("%Y-%m-%d"),
+                "count": "10",
+                "boundingBox": "",
+                "gId": ""
+            },
+            "download_settings": {
+                "download_path": MOSDAC_DATA_DIR,
+                "organize_by_date": False,
+                "skip_user_prompt": True,
+                "generate_error_log": False,
+                "error_log_path": ""
+            }
+        }
+        
+        # 3. Write config file
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(project_root, "config.json")
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        logger.info(f"MOSDAC download: {start_time} to {end_time}")
+        
+        # 4. Run mdapi.py
+        mdapi_path = os.path.join(project_root, "backend", "mosdac_engine", "mdapi.py")
+        if not os.path.exists(mdapi_path):
+            mdapi_path = os.path.join(project_root, "mdapi.py")
+        
+        if not os.path.exists(mdapi_path):
+            raise HTTPException(status_code=500, detail="mdapi.py not found")
+        
+        logger.info(f"Running MOSDAC download: {mdapi_path}")
+        result = subprocess.run(
+            ["python", mdapi_path],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"MOSDAC Error: {result.stderr}")
+            raise HTTPException(status_code=500, detail=f"Download failed: {result.stderr[:500]}")
+        
+        # 5. Find downloaded H5 files
+        h5_files = glob.glob(os.path.join(MOSDAC_DATA_DIR, "**", "*.h5"), recursive=True)
+        h5_files.extend(glob.glob(os.path.join(MOSDAC_DATA_DIR, "*.h5")))
+        h5_files = sorted(set(h5_files))
+        
+        if not h5_files:
+            return {
+                "status": "no_data",
+                "message": "No data available for the selected time range",
+                "files_downloaded": 0
+            }
+        
+        logger.info(f"Downloaded {len(h5_files)} files, running inference...")
+        
+        # 6. Run inference on each file
+        pipeline = get_inference_pipeline()
+        results = []
+        
+        for h5_path in h5_files:
+            analysis_id = str(uuid.uuid4())
+            result = pipeline.process_file(h5_path, OUTPUT_DIR, analysis_id)
+            
+            if result["success"]:
+                results.append({
+                    "analysis_id": analysis_id,
+                    "file": os.path.basename(h5_path),
+                    "tcc_pixels": result.get("tcc_pixels", 0),
+                    "outputs": {
+                        "mask_npy": f"/api/download/{analysis_id}/mask.npy",
+                        "mask_png": f"/api/download/{analysis_id}/mask.png",
+                        "netcdf": f"/api/download/{analysis_id}/output.nc"
+                    }
+                })
+        
+        return {
+            "status": "success",
+            "message": f"Downloaded and processed {len(h5_files)} files",
+            "files_downloaded": len(h5_files),
+            "results": results
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Download timeout (5 minutes)")
+    except Exception as e:
+        logger.error(f"MOSDAC download error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ===================== AUTH ENDPOINTS =====================
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
