@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, LogOut, User, Bell } from 'lucide-react';
+import { Menu, X, LogOut, User } from 'lucide-react';
 import apiClient from '@/services/api';
 import {
   DropdownMenu,
@@ -24,9 +24,8 @@ export default function Navbar() {
       setUser(currentUser);
       setIsLoggedIn(isAuth);
     };
-    
+
     checkAuth();
-    // Re-check auth state when the component mounts or when returning from login
     window.addEventListener('focus', checkAuth);
     return () => window.removeEventListener('focus', checkAuth);
   }, []);
@@ -72,16 +71,16 @@ export default function Navbar() {
                   Dashboard
                 </button>
                 <button
-                  onClick={() => navigateTo('/analysis')}
+                  onClick={() => navigateTo('/dashboard/upload')}
                   className="px-3 py-2 text-slate-300 hover:text-cyan-400 transition-colors text-sm font-medium rounded hover:bg-slate-800/50"
                 >
-                  Analysis
+                  Upload
                 </button>
                 <button
-                  onClick={() => navigateTo('/chat')}
+                  onClick={() => navigateTo('/exports')}
                   className="px-3 py-2 text-slate-300 hover:text-cyan-400 transition-colors text-sm font-medium rounded hover:bg-slate-800/50"
                 >
-                  Chatbot
+                  Exports
                 </button>
               </>
             )}
@@ -91,18 +90,6 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-3">
             {isLoggedIn && user ? (
               <>
-                {/* Notification Bell */}
-                <div className="relative group">
-                  <button className="p-2.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors duration-200">
-                    <Bell className="w-5 h-5" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                  </button>
-                  <div className="absolute right-0 mt-1 w-48 bg-slate-800 rounded-lg border border-slate-700 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 p-3 text-xs text-slate-300">
-                    <p className="font-semibold mb-1 text-slate-200">Notifications</p>
-                    <p>No new notifications</p>
-                  </div>
-                </div>
-
                 {/* User Profile Dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -120,13 +107,6 @@ export default function Navbar() {
                       <p className="font-semibold text-slate-100">{user.username}</p>
                       <p className="text-xs text-slate-400 break-words max-w-[200px]">{user.email}</p>
                     </div>
-                    <DropdownMenuSeparator className="bg-slate-700" />
-                    <DropdownMenuItem
-                      onClick={() => navigate('/settings')}
-                      className="text-slate-300 cursor-pointer hover:bg-slate-700 hover:text-slate-100"
-                    >
-                      Settings
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-slate-700" />
                     <DropdownMenuItem
                       onClick={handleLogout}
@@ -190,36 +170,28 @@ export default function Navbar() {
                   Dashboard
                 </button>
                 <button
-                  onClick={() => navigateTo('/analysis')}
+                  onClick={() => navigateTo('/dashboard/upload')}
                   className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
                 >
-                  Analysis
+                  Upload
                 </button>
                 <button
-                  onClick={() => navigateTo('/chat')}
+                  onClick={() => navigateTo('/exports')}
                   className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
                 >
-                  Chatbot
+                  Exports
                 </button>
               </>
             )}
             <div className="pt-2 border-t border-slate-700 space-y-1">
               {user ? (
-                <>
-                  <button
-                    onClick={() => navigate('/settings')}
-                    className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
-                  >
-                    Settings
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="block w-full text-left px-4 py-2 text-red-400 hover:text-red-300 hover:bg-slate-700 rounded transition-colors"
-                  >
-                    <LogOut className="w-4 h-4 mr-2 inline" />
-                    Logout
-                  </button>
-                </>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 text-red-400 hover:text-red-300 hover:bg-slate-700 rounded transition-colors"
+                >
+                  <LogOut className="w-4 h-4 mr-2 inline" />
+                  Logout
+                </button>
               ) : (
                 <>
                   <button

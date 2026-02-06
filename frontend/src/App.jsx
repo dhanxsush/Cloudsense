@@ -8,14 +8,9 @@ import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import DataUpload from "./pages/DataUpload";
-import Analysis from "./pages/Analysis";
-import Tracking from "./pages/Tracking";
-import Insights from "./pages/Insights";
 import Exports from "./pages/Exports";
-import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import Chat from "./pages/Chat";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
@@ -35,16 +30,11 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              
-              <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/dashboard/upload" element={<ProtectedRoute><DataUpload /></ProtectedRoute>} />
-              <Route path="/analysis" element={<ProtectedRoute><Analysis /></ProtectedRoute>} />
-              <Route path="/tracking" element={<ProtectedRoute><Tracking /></ProtectedRoute>} />
-              <Route path="/insights" element={<ProtectedRoute><Insights /></ProtectedRoute>} />
               <Route path="/exports" element={<ProtectedRoute><Exports /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
