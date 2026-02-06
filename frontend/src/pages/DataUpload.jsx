@@ -373,6 +373,14 @@ const DataUpload = () => {
                       <p className="text-sm text-slate-400 mb-3">TCC Pixels: {result.tcc_pixels}</p>
                       <div className="flex flex-wrap gap-2">
                         <a
+                          href={`${apiClient.baseURL}${result.outputs.satellite_png}`}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          🛰️ satellite.png
+                        </a>
+                        <a
                           href={`${apiClient.baseURL}${result.outputs.mask_npy}`}
                           className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors"
                           download
@@ -389,7 +397,7 @@ const DataUpload = () => {
                         </a>
                         <a
                           href={`${apiClient.baseURL}${result.outputs.netcdf}`}
-                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors"
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
                           download
                         >
                           output.nc

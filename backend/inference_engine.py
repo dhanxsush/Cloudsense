@@ -133,6 +133,18 @@ class InferencePipeline:
         plt.close()
         logger.info(f"Saved: {output_path}")
     
+    def _save_satellite_image(self, irbt: np.ndarray, output_path: str):
+        """Save original satellite IRBT image as .png"""
+        plt.figure(figsize=(10, 10))
+        plt.imshow(irbt, cmap='gray_r', vmin=180, vmax=320)  # Inverted gray (cold=white)
+        plt.colorbar(label='Brightness Temperature (K)', shrink=0.8)
+        plt.title('INSAT-3DR IR Brightness Temperature')
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(output_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        logger.info(f"Saved: {output_path}")
+    
     def _save_netcdf(self, irbt: np.ndarray, prob: np.ndarray, mask: np.ndarray,
                      lat: np.ndarray, lon: np.ndarray, timestamp: datetime, output_path: str):
         """Save NetCDF with CF-compliant structure"""
@@ -215,10 +227,12 @@ class InferencePipeline:
             logger.info(f"TCC pixels detected: {tcc_pixels}")
             
             # Save outputs
+            satellite_png_path = os.path.join(file_output_dir, "satellite.png")
             mask_npy_path = os.path.join(file_output_dir, "mask.npy")
             mask_png_path = os.path.join(file_output_dir, "mask.png")
             netcdf_path = os.path.join(file_output_dir, "output.nc")
             
+            self._save_satellite_image(irbt, satellite_png_path)  # Original satellite image
             self._save_mask_npy(mask, mask_npy_path)
             self._save_mask_png(mask, mask_png_path)
             self._save_netcdf(irbt, prob, mask, lat, lon, timestamp, netcdf_path)
@@ -228,6 +242,7 @@ class InferencePipeline:
                 "analysis_id": analysis_id,
                 "tcc_pixels": tcc_pixels,
                 "outputs": {
+                    "satellite_png": satellite_png_path,
                     "mask_npy": mask_npy_path,
                     "mask_png": mask_png_path,
                     "netcdf": netcdf_path

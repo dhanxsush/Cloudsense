@@ -234,6 +234,7 @@ async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dic
                     "file": os.path.basename(h5_path),
                     "tcc_pixels": result.get("tcc_pixels", 0),
                     "outputs": {
+                        "satellite_png": f"/api/download/{analysis_id}/satellite.png",
                         "mask_npy": f"/api/download/{analysis_id}/mask.npy",
                         "mask_png": f"/api/download/{analysis_id}/mask.png",
                         "netcdf": f"/api/download/{analysis_id}/output.nc"
@@ -402,6 +403,7 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
                 "status": "complete",
                 "message": f"Processed {file.filename}",
                 "outputs": {
+                    "satellite_png": f"/api/download/{analysis_id}/satellite.png",
                     "mask_npy": f"/api/download/{analysis_id}/mask.npy",
                     "mask_png": f"/api/download/{analysis_id}/mask.png",
                     "netcdf": f"/api/download/{analysis_id}/output.nc"
@@ -424,10 +426,10 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
 @app.get("/api/download/{analysis_id}/{filename}")
 async def download_output(analysis_id: str, filename: str, current_user: dict = Depends(verify_token)):
     """
-    Download output files: mask.npy, mask.png, output.nc
+    Download output files: satellite.png, mask.npy, mask.png, output.nc
     """
     # Validate filename
-    ALLOWED_FILES = {"mask.npy", "mask.png", "output.nc"}
+    ALLOWED_FILES = {"satellite.png", "mask.npy", "mask.png", "output.nc"}
     if filename not in ALLOWED_FILES:
         raise HTTPException(status_code=400, detail=f"Invalid file. Options: {ALLOWED_FILES}")
     
@@ -439,6 +441,7 @@ async def download_output(analysis_id: str, filename: str, current_user: dict = 
     
     # Set media type
     media_types = {
+        "satellite.png": "image/png",
         "mask.npy": "application/octet-stream",
         "mask.png": "image/png",
         "output.nc": "application/x-netcdf"
@@ -467,6 +470,7 @@ async def list_exports(current_user: dict = Depends(verify_token)):
                     "analysis_id": analysis_id,
                     "files": files,
                     "download_urls": {
+                        "satellite_png": f"/api/download/{analysis_id}/satellite.png" if "satellite.png" in files else None,
                         "mask_npy": f"/api/download/{analysis_id}/mask.npy" if "mask.npy" in files else None,
                         "mask_png": f"/api/download/{analysis_id}/mask.png" if "mask.png" in files else None,
                         "netcdf": f"/api/download/{analysis_id}/output.nc" if "output.nc" in files else None
