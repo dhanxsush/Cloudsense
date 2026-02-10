@@ -41,32 +41,29 @@ coverage/
 .pytest_cache/
 .coverage
 
-# ML Models & Training Artifacts (large files)
-*.pkl
-*.h5
-*.pt
-*.pth
-*.onnx
-/training/models/
-/training/masks/
-/training/vis/
-/models/
+# ML Model weights (large files — keep in Git LFS or download separately)
+model/*.pth
+model/*.pt
+model/*.onnx
 
-# Dataset files (typically large)
+# Dataset files (download separately)
+dataset/
 *.npy
-*.h5
-*.nc
-*.netcdf
 
-# Michaung analysis data
-/michaung_analysis/
+# Backend runtime artifacts
+backend/output/
+backend/uploads/
+backend/cloudsense.db
+backend/config.json
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+test_output/
 
 # OS
 Thumbs.db
 .Spotlight-V100
 .Trashes
+.hintrc

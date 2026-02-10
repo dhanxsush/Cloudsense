@@ -1,177 +1,91 @@
-# CloudSense: AI-Powered Tropical Cloud Intelligence
+# CloudSense
 
-Real-time detection and tracking of Tropical Cloud Clusters (TCCs) using satellite imagery and deep learning.
+**Tropical Cloud Cluster (TCC) Detection System** — Detects and classifies deep convective cloud systems from INSAT-3D/3DR satellite imagery using deep learning.
 
----
+## What It Does
 
-## 🏗️ Project Structure
+CloudSense processes infrared satellite imagery to automatically detect Tropical Cloud Clusters — large convective systems that can develop into tropical cyclones. The system:
+
+1. **Ingests** satellite data — either fetched live from [MOSDAC](https://mosdac.gov.in) (INSAT-3DR) or uploaded manually as HDF5/image files
+2. **Runs inference** using a U-Net segmentation model trained on IR brightness temperature data
+3. **Classifies** each detection based on minimum brightness temperature:
+   - 🔴 **Confirmed TCC** — min BT < 220K (deep convection)
+   - 🟡 **Likely TCC** — min BT < 235K
+   - ⚪ **Cloud Cluster** — min BT ≥ 235K
+4. **Generates outputs** — annotated overlay PNG, binary mask, and CF-compliant NetCDF
+5. **Displays results** on an interactive dashboard with detection map, cluster table, and analysis details
+
+## Screenshots
+
+After uploading an H5 file:
+- **Dashboard** — KPI cards (active TCCs, min BT, cloud-top height, mean radius), world map with cluster positions, recent analyses feed
+- **Analysis** — Side-by-side IR + TCC mask overlay, detection table with classification badges
+- **Exports** — Download NetCDF and PNG outputs per analysis
+
+## Quick Start
+
+```bash
+# 1. Install backend
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Install frontend
+cd ../frontend
+npm install
+
+# 3. Start everything
+cd ..
+./run.sh
+```
+
+Open **http://localhost:5173** → Sign up → Go to **Data Upload** → Upload an `.h5` file or fetch from MOSDAC.
+
+## Requirements
+
+| Dependency | Version |
+|------------|---------|
+| Python | 3.10+ |
+| Node.js | 18+ |
+| PyTorch | 2.0+ |
+| Model weights | `model/best_model.pth` |
+
+## How MOSDAC Fetch Works
+
+1. Enter your [MOSDAC](https://mosdac.gov.in/signup/) credentials on the Data Upload page
+2. Set hours back (default: 6) — fetches recent INSAT-3DR imagery
+3. System downloads `3RIMG_L1C_ASIA_MER` H5 files via MOSDAC API
+4. Each file is automatically run through the U-Net inference pipeline
+5. Results appear on the Dashboard, Analysis, and Exports pages
+
+## Project Structure
 
 ```
 cloudsense/
-├── frontend/          # React dashboard (User Interface)
-├── backend/           # FastAPI server (API & Orchestration)
-├── models/            # Trained ML models (Inference)
-└── training/          # Dataset & training scripts
+├── backend/                 # FastAPI + SQLite
+│   ├── app.py               # API endpoints (auth, upload, MOSDAC, analysis)
+│   ├── inference_engine.py  # U-Net pipeline (core ML)
+│   ├── db.py                # Database (users + analyses)
+│   ├── mosdac_manager.py    # MOSDAC download orchestrator
+│   └── mosdac_engine/       # mdapi.py (MOSDAC Data Access API)
+├── frontend/                # React + Vite + shadcn/ui
+│   └── src/pages/           # Dashboard, DataUpload, Analysis, Exports
+├── model/
+│   └── best_model.pth       # Trained U-Net weights (26MB)
+└── run.sh                   # Launch script
 ```
 
----
+## Tech Stack
 
-## 📦 Modules
+| Layer | Technology |
+|-------|-----------|
+| ML Model | PyTorch U-Net with MobileNetV2 encoder |
+| Backend | FastAPI, SQLite, NumPy, SciPy, netCDF4 |
+| Frontend | React 18, Vite, Tailwind CSS, shadcn/ui |
+| Satellite Data | MOSDAC INSAT-3DR `3RIMG_L1C_ASIA_MER` |
 
-### [frontend/](./frontend/) - User Interface
-React-based dashboard for real-time monitoring.
+## License
 
-**Quick Start:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-**Access:** http://localhost:5173
+See [LICENSE](LICENSE) for details.
 
----
-
-### [backend/](./backend/) - API Server
-FastAPI server that connects everything together.
-
-**Quick Start:**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app:app --reload --port 8000
-```
-**API Docs:** http://localhost:8000/docs
-
----
-
-### [models/](./models/) - ML Inference
-Trained U-Net model for cloud detection.
-
-**Contents:**
-- `best_model.pth` - Trained weights
-- `inference.py` - Standalone inference script
-- `README.md` - Usage documentation
-
----
-
-### [training/](./training/) - Dataset & Training
-Historical Michaung cyclone data and training scripts.
-
-**Contents:**
-- `data/raw/` - HDF5 satellite imagery
-- `train_model.py` - Training script
-- `track_kalman.py` - Trajectory analysis
-- Dataset index and labels
-
-**Note:** This folder contains large datasets and is not required for running the application.
-
----
-
-## 🚀 Quick Start (Full System)
-
-### 1. Start Backend
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app:app --reload --port 8000
-```
-
-### 2. Start Frontend
-Open new terminal:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### 3. Access Application
-- **Dashboard:** http://localhost:5173
-- **API:** http://localhost:8000/docs
-
----
-
-## 🔗 How Modules Connect
-
-```
-┌─────────────┐
-│  frontend/  │ ──HTTP──▶ ┌──────────┐
-│   (React)   │           │ backend/ │
-└─────────────┘           │ (FastAPI)│
-                          └──────────┘
-                               │
-                               │ imports
-                               ▼
-                          ┌──────────┐
-                          │ models/  │
-                          │ (U-Net)  │
-                          └──────────┘
-                               │
-                               │ trained on
-                               ▼
-                          ┌──────────┐
-                          │training/ │
-                          │(Dataset) │
-                          └──────────┘
-```
-
-**Data Flow:**
-1. User uploads file via `frontend/`
-2. `backend/` receives file
-3. `backend/` calls `models/inference.py`
-4. Results sent back to `frontend/`
-
----
-
-## 📖 Documentation
-
-Each module has detailed README:
-- **[frontend/README.md](./frontend/README.md)** - UI components, routing
-- **[backend/README.md](./backend/README.md)** - API endpoints, auth
-- **[models/README.md](./models/README.md)** - Model architecture, usage
-- **[training/README.md](./training/README.md)** - Dataset, training process
-
----
-
-## 🐛 Troubleshooting
-
-**Backend won't start:**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app:app --port 8000
-```
-
-**Frontend blank page:**
-```bash
-cd frontend
-rm -rf node_modules
-npm install
-npm run dev
-```
-
-**Model not found:**
-```bash
-# Verify model exists
-ls models/best_model.pth
-```
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push and create Pull Request
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE)
-
----
-
-**Built for atmospheric science research 🌍**
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design and API reference.

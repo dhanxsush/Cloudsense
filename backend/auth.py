@@ -1,27 +1,29 @@
+"""
+CloudSense Authentication Module
+Password hashing and JWT token management.
+"""
+
 import bcrypt
 from datetime import datetime, timedelta
 import jwt
 import os
 
-# Critical: JWT_SECRET must be set in environment variables
-JWT_SECRET = os.getenv("JWT_SECRET")
-if not JWT_SECRET:
-    raise ValueError(
-        "JWT_SECRET environment variable must be set. "
-        "Generate a secure secret with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
-    )
-
+# JWT Configuration - use default secret for development
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-please-change-in-production-12345678")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
+
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against hash"""
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+
 
 def create_jwt_token(user_id: int, email: str) -> dict:
     """Create JWT token"""
@@ -38,6 +40,7 @@ def create_jwt_token(user_id: int, email: str) -> dict:
         "token_type": "bearer",
         "expires_in": JWT_EXPIRATION_HOURS * 3600
     }
+
 
 def verify_jwt_token(token: str) -> dict:
     """Verify and decode JWT token"""

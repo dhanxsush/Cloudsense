@@ -3,8 +3,6 @@ import {
   LayoutDashboard,
   Upload,
   Activity,
-  Radar,
-  BarChart3,
   Download,
   Settings,
   Satellite,
@@ -19,8 +17,6 @@ const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Upload, label: 'Data Upload', path: '/dashboard/upload' },
   { icon: Activity, label: 'Analysis', path: '/analysis' },
-  { icon: Radar, label: 'Tracking', path: '/tracking' },
-  { icon: BarChart3, label: 'Insights', path: '/insights' },
   { icon: Download, label: 'Exports', path: '/exports' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];

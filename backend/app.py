@@ -22,7 +22,8 @@ load_dotenv()
 from db import (
     init_db, create_user, get_user_by_email, get_user_by_id,
     create_analysis, update_analysis_status, get_analysis, get_recent_analyses,
-    save_analysis_results, get_analysis_results
+    save_analysis_results, get_analysis_results,
+    get_dashboard_stats, get_all_recent_clusters
 )
 from auth import hash_password, verify_password, create_jwt_token, verify_jwt_token
 import jwt
@@ -58,14 +59,15 @@ app.add_middleware(
 
 # ===================== DIRECTORIES =====================
 
-OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "output")
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Mount output directory for static file serving
 app.mount("/static/output", StaticFiles(directory=OUTPUT_DIR), name="output")
+app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output_direct")
 
 
 # ===================== AUTH MODELS =====================
@@ -140,11 +142,11 @@ class MOSDACDownloadRequest(BaseModel):
     password: str
     hours_back: int = 6  # Download data from last N hours
 
-MOSDAC_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "MOSDAC_Data")
+MOSDAC_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dataset", "MOSDAC_Data")
 os.makedirs(MOSDAC_DATA_DIR, exist_ok=True)
 
 @app.post("/api/mosdac/download")
-async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dict = Depends(verify_token)):
+async def download_mosdac_data(request: MOSDACDownloadRequest):
     """
     Download current INSAT-3DR data from MOSDAC and run inference.
     Dataset: 3RIMG_L1C_ASIA_MER (6-channel Level1 Mercator for Asian Sector)
@@ -178,7 +180,7 @@ async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dic
         }
         
         # 3. Write config file
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        project_root = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(project_root, "config.json")
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
@@ -186,9 +188,7 @@ async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dic
         logger.info(f"MOSDAC download: {start_time} to {end_time}")
         
         # 4. Run mdapi.py
-        mdapi_path = os.path.join(project_root, "backend", "mosdac_engine", "mdapi.py")
-        if not os.path.exists(mdapi_path):
-            mdapi_path = os.path.join(project_root, "mdapi.py")
+        mdapi_path = os.path.join(project_root, "mosdac_engine", "mdapi.py")
         
         if not os.path.exists(mdapi_path):
             raise HTTPException(status_code=500, detail="mdapi.py not found")
@@ -226,20 +226,39 @@ async def download_mosdac_data(request: MOSDACDownloadRequest, current_user: dic
         
         for h5_path in h5_files:
             analysis_id = str(uuid.uuid4())
+            
+            # Create analysis record in DB BEFORE running inference
+            create_analysis(
+                analysis_id=analysis_id,
+                filename=os.path.basename(h5_path),
+                file_path=h5_path,
+                source="mosdac_download"
+            )
+            
             result = pipeline.process_file(h5_path, OUTPUT_DIR, analysis_id)
             
             if result["success"]:
+                # Persist results to DB so Analysis/Dashboard/Exports pages can find them
+                update_analysis_status(analysis_id, "complete")
+                save_analysis_results(analysis_id, result)
+                
                 results.append({
                     "analysis_id": analysis_id,
                     "file": os.path.basename(h5_path),
                     "tcc_pixels": result.get("tcc_pixels", 0),
+                    "tcc_count": result.get("tcc_count", 0),
+                    "total_area_km2": result.get("total_area_km2", 0),
+                    "detections": result.get("detections", []),
                     "outputs": {
                         "satellite_png": f"/api/download/{analysis_id}/satellite.png",
                         "mask_npy": f"/api/download/{analysis_id}/mask.npy",
                         "mask_png": f"/api/download/{analysis_id}/mask.png",
+                        "overlay_png": f"/api/download/{analysis_id}/overlay.png",
                         "netcdf": f"/api/download/{analysis_id}/output.nc"
                     }
                 })
+            else:
+                update_analysis_status(analysis_id, "failed")
         
         return {
             "status": "success",
@@ -342,19 +361,20 @@ def get_inference_pipeline():
 
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(verify_token)):
+async def upload_file(file: UploadFile = File(...)):
     """
-    Upload H5 file and run inference.
-    Returns analysis_id with paths to 3 outputs: mask.npy, mask.png, output.nc
+    Upload H5 or image file and run inference.
+    Returns analysis_id with paths to outputs: satellite.png, mask.npy, mask.png, and output.nc (H5 only)
     """
     try:
         # 1. Validate file type
-        ALLOWED_EXTENSIONS = {'.h5', '.hdf5'}
+        ALLOWED_EXTENSIONS = {'.h5', '.hdf5', '.png', '.jpg', '.jpeg'}
+        IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Only HDF5 files (.h5, .hdf5) are allowed. Got: {file_ext}"
+                detail=f"Only HDF5 (.h5, .hdf5) or image (.png, .jpg, .jpeg) files are allowed. Got: {file_ext}"
             )
         
         # 2. Validate file size (max 500MB)
@@ -389,26 +409,38 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
             source="manual_upload"
         )
         
-        # 6. Run inference
+        # 6. Run inference (use appropriate method based on file type)
         logger.info(f"Running inference on {file.filename}...")
         pipeline = get_inference_pipeline()
-        result = pipeline.process_file(file_path, OUTPUT_DIR, analysis_id)
+        
+        if file_ext in IMAGE_EXTENSIONS:
+            result = pipeline.process_image(file_path, OUTPUT_DIR, analysis_id)
+        else:
+            result = pipeline.process_file(file_path, OUTPUT_DIR, analysis_id)
         
         if result["success"]:
             update_analysis_status(analysis_id, "complete")
             save_analysis_results(analysis_id, result)
             
+            # Build response with outputs
+            outputs = {
+                "satellite_png": f"/api/download/{analysis_id}/satellite.png",
+                "mask_npy": f"/api/download/{analysis_id}/mask.npy",
+                "mask_png": f"/api/download/{analysis_id}/mask.png",
+                "overlay_png": f"/api/download/{analysis_id}/overlay.png",
+                "netcdf": f"/api/download/{analysis_id}/output.nc" if file_ext not in IMAGE_EXTENSIONS else None
+            }
+            
             return {
                 "analysis_id": analysis_id,
                 "status": "complete",
                 "message": f"Processed {file.filename}",
-                "outputs": {
-                    "satellite_png": f"/api/download/{analysis_id}/satellite.png",
-                    "mask_npy": f"/api/download/{analysis_id}/mask.npy",
-                    "mask_png": f"/api/download/{analysis_id}/mask.png",
-                    "netcdf": f"/api/download/{analysis_id}/output.nc"
-                },
-                "tcc_pixels": result.get("tcc_pixels", 0)
+                "input_type": "image" if file_ext in IMAGE_EXTENSIONS else "h5",
+                "outputs": outputs,
+                "tcc_pixels": result.get("tcc_pixels", 0),
+                "tcc_count": result.get("tcc_count", 0),
+                "total_area_km2": result.get("total_area_km2", 0),
+                "detections": result.get("detections", [])
             }
         else:
             update_analysis_status(analysis_id, "failed")
@@ -424,12 +456,12 @@ async def upload_file(file: UploadFile = File(...), current_user: dict = Depends
 # ===================== DOWNLOAD OUTPUTS =====================
 
 @app.get("/api/download/{analysis_id}/{filename}")
-async def download_output(analysis_id: str, filename: str, current_user: dict = Depends(verify_token)):
+async def download_output(analysis_id: str, filename: str):
     """
-    Download output files: satellite.png, mask.npy, mask.png, output.nc
+    Download output files: satellite.png, mask.npy, mask.png, overlay.png, output.nc
     """
     # Validate filename
-    ALLOWED_FILES = {"satellite.png", "mask.npy", "mask.png", "output.nc"}
+    ALLOWED_FILES = {"satellite.png", "mask.npy", "mask.png", "overlay.png", "output.nc"}
     if filename not in ALLOWED_FILES:
         raise HTTPException(status_code=400, detail=f"Invalid file. Options: {ALLOWED_FILES}")
     
@@ -444,6 +476,7 @@ async def download_output(analysis_id: str, filename: str, current_user: dict = 
         "satellite.png": "image/png",
         "mask.npy": "application/octet-stream",
         "mask.png": "image/png",
+        "overlay.png": "image/png",
         "output.nc": "application/x-netcdf"
     }
     
@@ -457,7 +490,7 @@ async def download_output(analysis_id: str, filename: str, current_user: dict = 
 # ===================== EXPORTS LIST =====================
 
 @app.get("/api/exports")
-async def list_exports(current_user: dict = Depends(verify_token)):
+async def list_exports():
     """List all available exports"""
     exports = []
     
@@ -483,10 +516,34 @@ async def list_exports(current_user: dict = Depends(verify_token)):
 # ===================== RECENT ANALYSES =====================
 
 @app.get("/api/analyses/recent")
-async def list_recent_analyses(limit: int = 10, current_user: dict = Depends(verify_token)):
-    """Get list of recent analyses"""
+async def list_recent_analyses(limit: int = 10):
+    """Get list of recent analyses with parsed results"""
     analyses = get_recent_analyses(limit)
+    
+    # Parse results JSON for each analysis
+    for analysis in analyses:
+        if analysis.get('results'):
+            try:
+                if isinstance(analysis['results'], str):
+                    analysis['results'] = json.loads(analysis['results'])
+            except json.JSONDecodeError:
+                analysis['results'] = {}
+    
     return analyses
+
+
+# ===================== DASHBOARD ENDPOINTS =====================
+
+@app.get("/api/dashboard/stats")
+async def dashboard_stats():
+    """Get aggregated stats for the dashboard."""
+    return get_dashboard_stats()
+
+
+@app.get("/api/analysis/clusters")
+async def analysis_clusters(limit: int = 50):
+    """Get all recent clusters for the map/table."""
+    return get_all_recent_clusters(limit)
 
 
 if __name__ == "__main__":

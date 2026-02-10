@@ -1,16 +1,37 @@
-import { useEffect, useRef } from 'react';
-
-// Sample cluster data
-const clusters = [
-  { id: 'TCC-001', lat: 10, lon: 130, radius: 150, intensity: 0.8 },
-  { id: 'TCC-002', lat: -5, lon: 155, radius: 120, intensity: 0.6 },
-  { id: 'TCC-003', lat: 15, lon: 95, radius: 180, intensity: 0.9 },
-  { id: 'TCC-004', lat: 5, lon: -60, radius: 100, intensity: 0.5 },
-  { id: 'TCC-005', lat: -10, lon: 165, radius: 140, intensity: 0.7 },
-];
+import { useEffect, useRef, useState } from 'react';
+import apiClient from '@/services/api';
 
 const WorldMap = () => {
   const canvasRef = useRef(null);
+  const [clusters, setClusters] = useState([]);
+
+  useEffect(() => {
+    const fetchClusters = async () => {
+      try {
+        const response = await fetch(`${apiClient.baseURL}/api/analysis/clusters?limit=100`, {
+          headers: { 'Authorization': `Bearer ${apiClient.getToken()}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Map backend data format to visualization format
+          const mapped = data.map(c => ({
+            id: c.id,
+            lat: c.centroidLat || 0,
+            lon: c.centroidLon || 0,
+            radius: c.radius || 50,
+            intensity: c.intensity || 0.5
+          }));
+          setClusters(mapped);
+        }
+      } catch (error) {
+        console.error("Failed to fetch map clusters", error);
+      }
+    };
+
+    fetchClusters();
+    const interval = setInterval(fetchClusters, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -124,7 +145,7 @@ const WorldMap = () => {
       window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationId);
     };
-  }, []);
+  }, [clusters]);
 
   return (
     <div className="bg-card rounded-lg p-4 border border-border h-full">

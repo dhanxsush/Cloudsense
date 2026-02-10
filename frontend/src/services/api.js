@@ -4,7 +4,7 @@
  */
 
 // Demo mode - no backend required
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 
 // Mock user for demo
 const mockUser = {
@@ -28,19 +28,36 @@ const mockTrajectoryData = [
 ];
 
 const apiClient = {
-  // Demo mode signup - always succeeds
+  // API Base URL
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+
+  // Signup
   async signup(username, email, password) {
     if (DEMO_MODE) {
       await new Promise(r => setTimeout(r, 500));
       const user = { ...mockUser, username, email };
       localStorage.setItem('authToken', 'demo-token-' + Date.now());
       localStorage.setItem('user', JSON.stringify(user));
-      return { message: 'Account created', user };
+      return { access_token: 'demo-token', user };
     }
-    // Real backend call would go here
+
+    const response = await fetch(`${this.baseURL}/api/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Signup failed');
+    }
+
+    localStorage.setItem('authToken', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    return data;
   },
 
-  // Demo mode login - accepts any credentials
+  // Login
   async login(email, password) {
     if (DEMO_MODE) {
       await new Promise(r => setTimeout(r, 500));
@@ -49,11 +66,38 @@ const apiClient = {
       localStorage.setItem('user', JSON.stringify(user));
       return { access_token: 'demo-token', user };
     }
+
+    const response = await fetch(`${this.baseURL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || 'Login failed');
+    }
+
+    localStorage.setItem('authToken', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    return data;
   },
 
   async verifyToken(token) {
     if (DEMO_MODE) {
       return { valid: true, user: this.getUser() };
+    }
+
+    try {
+      const response = await fetch(`${this.baseURL}/api/auth/verify`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        return { valid: true, user: await response.json() };
+      }
+      return { valid: false };
+    } catch {
+      return { valid: false };
     }
   },
 
@@ -63,43 +107,46 @@ const apiClient = {
       await new Promise(r => setTimeout(r, 300));
       return mockTrajectoryData;
     }
+
+    const response = await fetch(`${this.baseURL}/api/analysis/clusters`, {
+      headers: { 'Authorization': `Bearer ${this.getToken()}` },
+    });
+    return response.ok ? await response.json() : [];
   },
 
-  // Upload file (simulated)
+  // Upload file
   async uploadFile(file, onProgress) {
     if (DEMO_MODE) {
       for (let i = 0; i <= 100; i += 20) {
         await new Promise(r => setTimeout(r, 200));
         if (onProgress) onProgress(i);
       }
-      const analysisId = 'demo-' + Date.now();
-      return {
-        analysis_id: analysisId,
-        status: 'complete',
-        message: `Processed ${file.name} (Demo Mode)`,
-        total_frames: mockTrajectoryData.length,
-      };
+      return { analysis_id: 'demo-' + Date.now(), status: 'complete' };
     }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${this.baseURL}/api/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.getToken()}` },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || 'Upload failed');
+    return data;
   },
 
-  // Generate report (simulated)
+  // Generate report
   async generateReport(analysisId) {
     if (DEMO_MODE) {
       await new Promise(r => setTimeout(r, 1000));
-      return {
-        status: 'complete',
-        download_urls: {
-          netcdf: '#demo',
-          csv: '#demo',
-          json: '#demo',
-          predictions: '#demo',
-        },
-        report: {
-          metadata: { total_frames: 10, mean_bt: 205.8 },
-          summary: { total_tracks: 2, total_observations: 10 },
-        },
-      };
+      return { status: 'complete' };
     }
+
+    const response = await fetch(`${this.baseURL}/api/exports`, {
+      headers: { 'Authorization': `Bearer ${this.getToken()}` },
+    });
+    return response.ok ? await response.json() : {};
   },
 
   setAuthToken(token) {
@@ -112,6 +159,11 @@ const apiClient = {
 
   getAuthToken() {
     return localStorage.getItem('authToken');
+  },
+
+  // Alias for getAuthToken (for compatibility)
+  getToken() {
+    return this.getAuthToken();
   },
 
   setUser(user) {

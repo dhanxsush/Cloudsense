@@ -16,7 +16,7 @@ class MosdacManager:
         
         config = {
             "user_credentials": {
-                "username": username,
+                "username/email": username,
                 "password": password
             },
             "search_parameters": {
@@ -30,9 +30,8 @@ class MosdacManager:
             "download_settings": {
                 "download_path": os.path.join(self.working_dir, "downloads"),
                 "organize_by_date": True,
-                "skip_user_prompt": True,
-                "generate_error_log": True,
-                "error_log_path": os.path.join(self.working_dir, "logs")
+                "skip_user_input": True,
+                "generate_error_logs": True
             }
         }
         

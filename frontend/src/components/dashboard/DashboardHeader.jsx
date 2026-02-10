@@ -1,6 +1,5 @@
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import LiveSyncButton from './LiveSyncButton';
 
 const DashboardHeader = ({ title, subtitle }) => {
   return (
@@ -15,7 +14,6 @@ const DashboardHeader = ({ title, subtitle }) => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <Input placeholder="Search..." className="pl-10 w-64 bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500" />
           </div>
-          <LiveSyncButton />
         </div>
       </div>
     </header>
@@ -23,4 +21,3 @@ const DashboardHeader = ({ title, subtitle }) => {
 };
 
 export default DashboardHeader;
-

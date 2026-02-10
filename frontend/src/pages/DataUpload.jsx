@@ -76,7 +76,8 @@ const DataUpload = () => {
         addLog("Running U-Net inference on downloaded data...");
 
         result.results?.forEach((r, i) => {
-          addLog(`✓ Processed: ${r.file} (${r.tcc_pixels} TCC pixels)`);
+          addLog(`✓ Processed: ${r.file} — ${r.tcc_count || 0} TCCs detected, ${r.tcc_pixels} TCC pixels`);
+          if (r.total_area_km2) addLog(`   Total area: ${(r.total_area_km2 / 1000).toFixed(0)}k km²`);
         });
 
         addLog("✓ All files processed successfully!");
@@ -104,7 +105,10 @@ const DataUpload = () => {
 
   // ==================== FILE UPLOAD ====================
   const handleFileSelect = (file) => {
-    if (file && (file.name.endsWith('.h5') || file.name.endsWith('.hdf5'))) {
+    const validExtensions = ['.h5', '.hdf5', '.png', '.jpg', '.jpeg'];
+    const fileExt = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+
+    if (file && validExtensions.includes(fileExt)) {
       setSelectedFile(file);
       setProcessingStatus(null);
       setLogs([]);
@@ -112,7 +116,7 @@ const DataUpload = () => {
     } else {
       toast({
         title: "Invalid File",
-        description: "Please select an HDF5 (.h5, .hdf5) file",
+        description: "Please select an HDF5 (.h5, .hdf5) or image (.png, .jpg, .jpeg) file",
         variant: "destructive"
       });
     }
@@ -155,6 +159,9 @@ const DataUpload = () => {
         analysis_id: result.analysis_id,
         file: selectedFile.name,
         tcc_pixels: result.tcc_pixels,
+        tcc_count: result.tcc_count,
+        total_area_km2: result.total_area_km2,
+        detections: result.detections,
         outputs: result.outputs
       }]);
 
@@ -281,16 +288,16 @@ const DataUpload = () => {
             >
               <Upload className="w-16 h-16 mx-auto mb-4 text-slate-500" />
               <h3 className="text-xl font-semibold text-slate-200 mb-2">
-                Upload Local H5 File
+                Upload Local File
               </h3>
               <p className="text-slate-400 mb-4">
-                Drag & drop or browse for HDF5 files (.h5, .hdf5)
+                Drag & drop or browse for HDF5 (.h5, .hdf5) or image (.png, .jpg, .jpeg) files
               </p>
               <input
                 type="file"
                 id="file-input"
                 className="hidden"
-                accept=".h5,.hdf5"
+                accept=".h5,.hdf5,.png,.jpg,.jpeg"
                 onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
               />
               <Button variant="outline" onClick={() => document.getElementById('file-input').click()}>
@@ -362,56 +369,76 @@ const DataUpload = () => {
               </div>
             )}
 
-            {/* Download Results */}
+            {/* Download Results - Combined Visualization */}
             {downloadResults && downloadResults.length > 0 && (
               <div className="bg-slate-900 rounded-lg border border-green-500/30 p-6">
-                <h3 className="text-lg font-semibold text-slate-200 mb-4">📦 Generated Outputs</h3>
+                <h3 className="text-lg font-semibold text-slate-200 mb-4">📦 TCC Detection Result</h3>
                 <div className="space-y-4">
                   {downloadResults.map((result, i) => (
-                    <div key={i} className="bg-slate-800 rounded-lg p-4">
-                      <p className="text-slate-300 font-medium mb-2">{result.file}</p>
-                      <p className="text-sm text-slate-400 mb-3">TCC Pixels: {result.tcc_pixels}</p>
+                    <div key={i} className="space-y-4">
+                      <p className="text-slate-400 text-sm">{result.file}</p>
+
+                      {/* Combined visualization (IR + TCC Mask) */}
+                      <div className="bg-black rounded-lg overflow-hidden">
+                        <img
+                          src={`${apiClient.baseURL}${result.outputs.overlay_png}?t=${Date.now()}`}
+                          alt="TCC Detection Result"
+                          className="w-full"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="hidden items-center justify-center h-48 text-slate-500">
+                          Combined visualization loading...
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-slate-800 rounded-lg p-3">
+                          <p className="text-slate-400 text-sm">TCC Pixels</p>
+                          <p className="text-2xl font-bold text-purple-400">{result.tcc_pixels || 0}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3">
+                          <p className="text-slate-400 text-sm">TCC Count</p>
+                          <p className="text-2xl font-bold text-cyan-400">{result.tcc_count || 0}</p>
+                        </div>
+                        <div className="bg-slate-800 rounded-lg p-3">
+                          <p className="text-slate-400 text-sm">Total Area</p>
+                          <p className="text-2xl font-bold text-green-400">
+                            {result.total_area_km2 ? `${(result.total_area_km2 / 1000).toFixed(0)}k km²` : '0'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Download buttons */}
                       <div className="flex flex-wrap gap-2">
                         <a
-                          href={`${apiClient.baseURL}${result.outputs.satellite_png}`}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          🛰️ satellite.png
-                        </a>
-                        <a
-                          href={`${apiClient.baseURL}${result.outputs.mask_npy}`}
-                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors"
+                          href={`${apiClient.baseURL}${result.outputs.overlay_png}`}
+                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded"
                           download
                         >
-                          mask.npy
+                          📊 Download Result
                         </a>
-                        <a
-                          href={`${apiClient.baseURL}${result.outputs.mask_png}`}
-                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          mask.png
-                        </a>
-                        <a
-                          href={`${apiClient.baseURL}${result.outputs.netcdf}`}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
-                          download
-                        >
-                          output.nc
-                        </a>
+                        {result.outputs.netcdf && (
+                          <a
+                            href={`${apiClient.baseURL}${result.outputs.netcdf}`}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded"
+                            download
+                          >
+                            📁 NetCDF
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
                 <Button
-                  onClick={() => navigate('/exports')}
-                  className="mt-4 w-full"
-                  variant="outline"
+                  onClick={() => navigate('/analysis')}
+                  className="mt-4 w-full bg-cyan-600 hover:bg-cyan-700"
                 >
-                  View All Exports
+                  View Analysis Details
                 </Button>
               </div>
             )}

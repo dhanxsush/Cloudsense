@@ -82,6 +82,18 @@ export default function Navbar() {
                 >
                   Exports
                 </button>
+                <button
+                  onClick={() => navigateTo('/analysis')}
+                  className="px-3 py-2 text-slate-300 hover:text-cyan-400 transition-colors text-sm font-medium rounded hover:bg-slate-800/50"
+                >
+                  Analysis
+                </button>
+                <button
+                  onClick={() => navigateTo('/settings')}
+                  className="px-3 py-2 text-slate-300 hover:text-cyan-400 transition-colors text-sm font-medium rounded hover:bg-slate-800/50"
+                >
+                  Settings
+                </button>
               </>
             )}
           </div>
@@ -180,6 +192,18 @@ export default function Navbar() {
                   className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
                 >
                   Exports
+                </button>
+                <button
+                  onClick={() => navigateTo('/analysis')}
+                  className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
+                >
+                  Analysis
+                </button>
+                <button
+                  onClick={() => navigateTo('/settings')}
+                  className="block w-full text-left px-4 py-2 text-slate-300 hover:text-cyan-400 hover:bg-slate-700 rounded transition-colors"
+                >
+                  Settings
                 </button>
               </>
             )}
